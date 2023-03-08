@@ -1,0 +1,65 @@
+echo "开始mysql8.0环境安装..."
+mkdir -p mysqltmp
+tar -xvf mysql-8.0.20-1.el8.x86_64.rpm-bundle.tar -C ./mysqltmp
+cd mysqltmp
+rpm -ivh mysql-community-common-8.0.20-1.el8.x86_64.rpm
+rpm -ivh mysql-community-libs-8.0.20-1.el8.x86_64.rpm
+rpm -ivh mysql-community-client-8.0.20-1.el8.x86_64.rpm
+rpm -ivh mysql-community-server-8.0.20-1.el8.x86_64.rpm --nodeps --force
+echo "替换mysql配置my.cnf文件"
+cd -
+###这里用\是因为 服务器会默认增加别名 alias cp=’cp -i’，当你执行cp时，其实执行的是cp –i
+\cp -f ./my.cnf /etc
+echo "mysql8.0环境安装完成"
+systemctl enable mysqld.service
+echo "启动mysql服务"
+systemctl start mysqld.service
+
+echo "进行数据库初始化"
+
+mysql -e "source inituser.sql;"
+
+###需要保证脚本文件在进入mysql时的文件夹下
+echo "开始数据库初始化，需等待几分钟，请勿操作..."
+mysql -uroot -pDas###123 -e "source pms.sql"
+
+echo "数据库初始化结束"
+
+echo "停止数据库..."
+systemctl stop mysqld.service
+echo "替换mysql配置my.cnf文件，去除无密码登录配置"
+\cp -fb ./my1.cnf /etc/my.cnf
+systemctl start mysqld.service
+echo "重启数据库完成，安装结束"
+
+
+echo "docker环境安装开始"
+###安装依赖包
+sudo yum install -y yum-utils
+###添加国内源
+sudo yum-config-manager \
+    --add-repo \
+    https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+sudo sed -i 's/download.docker.com/mirrors.aliyun.com\/docker-ce/g' /etc/yum.repos.d/docker-ce.repo
+
+###安装开始
+sudo yum install docker-ce docker-ce-cli containerd.io
+
+firewall-cmd --permanent --zone=trusted --add-interface=docker0
+firewall-cmd --reload
+
+###启动docker
+sudo systemctl enable docker
+sudo systemctl start docker
+
+###导入镜像文件
+vs="6.5.0.23030701"
+docker import - vps-parkingapi:$vs < ./images/parkingapi.tar
+docker import - vps-fileserver:$vs < ./images/fileserver.tar
+docker import - vps-platformapi:$vs < ./images/platformapi.tar
+docker import - vps-web:$vs < ./images/web.tar
+docker import - vps-monitorserver:$vs < ./images/monitorserver.tar
+docker import - vps-mculinuxserver:$vs < ./images/mculinuxserver.tar
+docker import - vps-controlpanel:$vs < ./images/controlpanel.tar
+
+###todo需要先启动控制面板容器
